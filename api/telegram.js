@@ -1,9 +1,4 @@
-import { Redis } from '@upstash/redis';
-
-// Khởi tạo Redis client từ REDIS_URL (có sẵn token trong URL)
-const redis = new Redis({
-  url: process.env.REDIS_URL,
-});
+import { kv } from '@vercel/kv';
 
 export default async function handler(req) {
   if (req.method !== 'POST') {
@@ -29,16 +24,13 @@ export default async function handler(req) {
     const command = match[1];
     const args = match[2].trim();
 
-    // Lấy danh sách voucher hiện tại từ Redis (lưu dạng chuỗi JSON)
-    let raw = await redis.get(chatId);
-    let vouchers = raw ? JSON.parse(raw) : [];
+    // Lấy danh sách voucher từ KV (tự động trả về mảng)
+    let vouchers = (await kv.get(chatId)) || [];
 
     if (command === 'add') {
       try {
         const v = JSON.parse(args);
-        if (!v.promotionid || !v.voucher_code || !v.signature) {
-          throw new Error('Thiếu trường dữ liệu');
-        }
+        if (!v.promotionid || !v.voucher_code || !v.signature) throw new Error('Thiếu');
         if (vouchers.some(item => item.voucher_code === v.voucher_code)) {
           await sendMessage(chatId, `⚠️ Voucher ${v.voucher_code} đã tồn tại.`);
         } else {
@@ -47,11 +39,11 @@ export default async function handler(req) {
             promotionid: v.promotionid,
             signature: v.signature
           });
-          await redis.set(chatId, JSON.stringify(vouchers));
+          await kv.set(chatId, vouchers);
           await sendMessage(chatId, `✅ Đã thêm voucher ${v.voucher_code}.`);
         }
       } catch {
-        await sendMessage(chatId, '❌ JSON không hợp lệ. Gửi đúng định dạng:\n/add {"promotionid":...,"voucher_code":"...","signature":"..."}');
+        await sendMessage(chatId, '❌ JSON không hợp lệ. Gửi đúng:\n/add {"promotionid":...,"voucher_code":"...","signature":"..."}');
       }
     } else if (command === 'dele') {
       const code = args;
@@ -60,7 +52,7 @@ export default async function handler(req) {
         await sendMessage(chatId, `❌ Không tìm thấy voucher ${code}.`);
       } else {
         vouchers.splice(index, 1);
-        await redis.set(chatId, JSON.stringify(vouchers));
+        await kv.set(chatId, vouchers);
         await sendMessage(chatId, `🗑️ Đã xóa voucher ${code}.`);
       }
     }
