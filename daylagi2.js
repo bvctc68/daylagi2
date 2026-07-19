@@ -1,7 +1,7 @@
 (function() {
   // ========= CẤU HÌNH =========
   const BOT_TOKEN = '8906414234:AAFNzObE52Ky3NgxEc1D5johv4PMKZGD3X8'; // Token bot
-  const APPS_SCRIPT_URL = 'https://your-app.vercel.app/api/vouchers'; // <-- Thay bằng URL của bạn
+  const APPS_SCRIPT_URL = 'https://daylagi2.vercel.app/api/vouchers'; // <-- Thay bằng URL của bạn
 
   // Lấy chat_id từ localStorage, nếu chưa có thì hỏi người dùng
   let chatId = localStorage.getItem('telegram_chat_id');
