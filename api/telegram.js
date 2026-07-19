@@ -36,8 +36,15 @@ export default async function handler(req, res) {
         await kv.set(chatId, vouchers);
         await sendMessage(chatId, `🗑️ Đã xóa voucher ${code}.`);
       }
+    } else if (text === '/list') {
+      if (vouchers.length === 0) {
+        await sendMessage(chatId, '📋 Danh sách voucher đang theo dõi: (trống)');
+      } else {
+        const list = vouchers.map(v => `• ${v.voucher_code}`).join('\n');
+        await sendMessage(chatId, `📋 Danh sách voucher đang theo dõi:\n${list}`);
+      }
     } else {
-      await sendMessage(chatId, 'Lệnh không hợp lệ. Dùng:\n/add {json}\n/dele <mã_voucher>');
+      await sendMessage(chatId, 'Lệnh không hợp lệ. Dùng:\n/add {json}\n/dele <mã_voucher>\n/list');
     }
 
     return res.status(200).json({ ok: true });
