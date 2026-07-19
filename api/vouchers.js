@@ -1,4 +1,8 @@
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
+
+const redis = new Redis({
+  url: process.env.REDIS_URL,
+});
 
 export default async function handler(req) {
   const url = new URL(req.url);
@@ -11,7 +15,8 @@ export default async function handler(req) {
   }
 
   try {
-    const vouchers = (await kv.get(chatId)) || [];
+    let raw = await redis.get(chatId);
+    const vouchers = raw ? JSON.parse(raw) : [];
     return new Response(JSON.stringify(vouchers), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
