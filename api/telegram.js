@@ -1,13 +1,14 @@
 import { kv } from '@vercel/kv';
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(200).end('OK');
-
-  // Trả response ngay để tránh timeout
-  res.status(200).json({ ok: true });
+  if (req.method !== 'POST') {
+    return res.status(200).end('OK');
+  }
 
   const { message } = req.body;
-  if (!message || !message.text) return;
+  if (!message || !message.text) {
+    return res.status(200).end('OK');
+  }
 
   const chatId = message.chat.id.toString();
   const text = message.text.trim();
@@ -42,9 +43,12 @@ export default async function handler(req, res) {
     } else {
       await sendMessage(chatId, 'Lệnh không hợp lệ. Dùng:\n/add {json}\n/dele <mã_voucher>');
     }
+
+    // Trả response sau khi mọi thứ hoàn tất
+    return res.status(200).json({ ok: true });
   } catch (err) {
     console.error('Telegram error:', err);
-    try { await sendMessage(chatId, '❌ Lỗi hệ thống, thử lại sau.'); } catch (e) {}
+    return res.status(500).json({ error: 'Internal error' });
   }
 }
 
