@@ -1,8 +1,4 @@
-import { Redis } from '@upstash/redis';
-
-const redis = new Redis({
-  url: process.env.REDIS_URL,
-});
+import { kv } from '@vercel/kv';
 
 export default async function handler(req) {
   const url = new URL(req.url);
@@ -15,17 +11,13 @@ export default async function handler(req) {
   }
 
   try {
-    let raw = await redis.get(chatId);
-    const vouchers = raw ? JSON.parse(raw) : [];
+    const vouchers = (await kv.get(chatId)) || [];
     return new Response(JSON.stringify(vouchers), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (err) {
     console.error('Vouchers API error:', err);
-    return new Response(JSON.stringify([]), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 }
