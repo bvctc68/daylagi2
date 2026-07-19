@@ -1,11 +1,11 @@
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
 
-export const config = {
-  runtime: 'edge', // chạy nhanh, nhẹ
-};
+// Khởi tạo Redis client từ REDIS_URL (có sẵn token trong URL)
+const redis = new Redis({
+  url: process.env.REDIS_URL,
+});
 
 export default async function handler(req) {
-  // Chỉ chấp nhận POST
   if (req.method !== 'POST') {
     return new Response('Only POST allowed', { status: 405 });
   }
@@ -20,7 +20,6 @@ export default async function handler(req) {
     const chatId = message.chat.id.toString();
     const text = message.text.trim();
 
-    // Regex tách lệnh /add hoặc /dele
     const match = text.match(/^\/(add|dele)\s*(.*)/s);
     if (!match) {
       await sendMessage(chatId, 'Lệnh không hợp lệ. Dùng:\n/add {json}\n/dele <mã_voucher>');
@@ -30,8 +29,9 @@ export default async function handler(req) {
     const command = match[1];
     const args = match[2].trim();
 
-    // Lấy danh sách voucher hiện tại từ KV
-    let vouchers = (await kv.get(chatId)) || [];
+    // Lấy danh sách voucher hiện tại từ Redis (lưu dạng chuỗi JSON)
+    let raw = await redis.get(chatId);
+    let vouchers = raw ? JSON.parse(raw) : [];
 
     if (command === 'add') {
       try {
@@ -39,20 +39,18 @@ export default async function handler(req) {
         if (!v.promotionid || !v.voucher_code || !v.signature) {
           throw new Error('Thiếu trường dữ liệu');
         }
-        // Kiểm tra trùng
-        const exists = vouchers.some(item => item.voucher_code === v.voucher_code);
-        if (exists) {
-          await sendMessage(chatId, `⚠️ Voucher ${v.voucher_code} đã có trong danh sách.`);
+        if (vouchers.some(item => item.voucher_code === v.voucher_code)) {
+          await sendMessage(chatId, `⚠️ Voucher ${v.voucher_code} đã tồn tại.`);
         } else {
           vouchers.push({
             voucher_code: v.voucher_code,
             promotionid: v.promotionid,
             signature: v.signature
           });
-          await kv.set(chatId, vouchers);
-          await sendMessage(chatId, `✅ Đã thêm voucher ${v.voucher_code} vào theo dõi.`);
+          await redis.set(chatId, JSON.stringify(vouchers));
+          await sendMessage(chatId, `✅ Đã thêm voucher ${v.voucher_code}.`);
         }
-      } catch (e) {
+      } catch {
         await sendMessage(chatId, '❌ JSON không hợp lệ. Gửi đúng định dạng:\n/add {"promotionid":...,"voucher_code":"...","signature":"..."}');
       }
     } else if (command === 'dele') {
@@ -62,8 +60,8 @@ export default async function handler(req) {
         await sendMessage(chatId, `❌ Không tìm thấy voucher ${code}.`);
       } else {
         vouchers.splice(index, 1);
-        await kv.set(chatId, vouchers);
-        await sendMessage(chatId, `🗑️ Đã xóa voucher ${code} khỏi danh sách.`);
+        await redis.set(chatId, JSON.stringify(vouchers));
+        await sendMessage(chatId, `🗑️ Đã xóa voucher ${code}.`);
       }
     }
 
@@ -74,15 +72,10 @@ export default async function handler(req) {
   }
 }
 
-// Hàm gửi tin nhắn Telegram
 async function sendMessage(chatId, text) {
   const token = process.env.BOT_TOKEN;
-  if (!token) {
-    console.error('BOT_TOKEN is not set');
-    return;
-  }
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
-  await fetch(url, {
+  if (!token) return;
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text })
