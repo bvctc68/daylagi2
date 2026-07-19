@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 
-const TARGET_CHAT_ID = '-1002109878033'; // ID kênh của bạn
+const TARGET_CHAT_ID = '-1001846542105'; // ID kênh lưu trữ dữ liệu
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(200).end('OK');
@@ -8,6 +8,7 @@ export default async function handler(req, res) {
   if (!message?.text) return res.status(200).end('OK');
 
   const text = message.text.trim();
+  const replyTo = message.chat.id.toString(); // Người gửi lệnh (có thể là cá nhân hoặc kênh)
 
   try {
     let vouchers = (await kv.get(TARGET_CHAT_ID)) || [];
@@ -17,34 +18,30 @@ export default async function handler(req, res) {
         const v = JSON.parse(text.slice(5));
         if (!v.promotionid || !v.voucher_code || !v.signature) throw new Error('Thiếu');
         if (vouchers.some(e => e.voucher_code === v.voucher_code)) {
-          await sendMessage(TARGET_CHAT_ID, `⚠️ Voucher ${v.voucher_code} đã tồn tại.`);
-          // Cũng báo lại cho người gửi lệnh (cá nhân)
-          await sendMessage(message.chat.id.toString(), `⚠️ Voucher ${v.voucher_code} đã tồn tại.`);
+          await sendMessage(replyTo, `⚠️ Voucher ${v.voucher_code} đã tồn tại.`);
         } else {
-          vouchers.push({ voucher_code: v.voucher_code, promotionid: v.promotionid, signature: v.signature });
+          vouchers.push({ voucher_code: v.voucher_code, promotionid: v.promotionid, signature: v.signature, message: v.message || '' });
           await kv.set(TARGET_CHAT_ID, vouchers);
-          await sendMessage(TARGET_CHAT_ID, `✅ Đã thêm voucher ${v.voucher_code} vào kênh.`);
-          await sendMessage(message.chat.id.toString(), `✅ Đã thêm voucher ${v.voucher_code} vào kênh.`);
+          await sendMessage(replyTo, `✅ Đã thêm voucher ${v.voucher_code}.`);
         }
       } catch {
-        await sendMessage(message.chat.id.toString(), '❌ JSON không hợp lệ.');
+        await sendMessage(replyTo, '❌ JSON không hợp lệ.');
       }
     } else if (text.startsWith('/dele ')) {
       const code = text.slice(6).trim();
       const idx = vouchers.findIndex(e => e.voucher_code === code);
       if (idx === -1) {
-        await sendMessage(message.chat.id.toString(), `❌ Không tìm thấy voucher ${code}.`);
+        await sendMessage(replyTo, `❌ Không tìm thấy voucher ${code}.`);
       } else {
         vouchers.splice(idx, 1);
         await kv.set(TARGET_CHAT_ID, vouchers);
-        await sendMessage(TARGET_CHAT_ID, `🗑️ Đã xóa voucher ${code} khỏi kênh.`);
-        await sendMessage(message.chat.id.toString(), `🗑️ Đã xóa voucher ${code} khỏi kênh.`);
+        await sendMessage(replyTo, `🗑️ Đã xóa voucher ${code}.`);
       }
     } else if (text === '/list') {
       const list = vouchers.map(v => `• ${v.voucher_code}`).join('\n') || 'Trống';
-      await sendMessage(message.chat.id.toString(), `📋 Danh sách trong kênh:\n${list}`);
+      await sendMessage(replyTo, `📋 Danh sách trong kênh:\n${list}`);
     } else {
-      await sendMessage(message.chat.id.toString(), 'Lệnh không hợp lệ. Dùng:\n/add {json}\n/dele <mã>\n/list');
+      await sendMessage(replyTo, 'Lệnh không hợp lệ. Dùng:\n/add {json}\n/dele <mã>\n/list');
     }
 
     return res.status(200).json({ ok: true });
