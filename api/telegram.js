@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 
-const TARGET_CHAT_ID = '-1001846542105'; // ID kênh của bạn (có thể đổi nếu cần)
+const TARGET_CHAT_ID = '-1001578007378'; // ID kênh của bạn (có thể đổi nếu cần)
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(200).end('OK');
