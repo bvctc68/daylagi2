@@ -1,14 +1,23 @@
 import { kv } from '@vercel/kv';
 
-const TARGET_CHAT_ID = '-1001578007378'; // ID kênh của bạn (có thể đổi nếu cần)
+const TARGET_CHAT_ID = '-1001578007378'; // ID kênh lưu trữ dữ liệu
+const ALLOWED_USERS = ['1400175163']; // Thay bằng ID Telegram của bạn (có thể thêm nhiều)
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(200).end('OK');
   const { message } = req.body;
   if (!message?.text) return res.status(200).end('OK');
 
+  const fromId = message.from?.id?.toString(); // ID người gửi
+  const replyTo = message.chat.id.toString();   // Nơi nhận phản hồi (có thể là chat riêng hoặc kênh)
+
+  // Kiểm tra quyền
+  if (!ALLOWED_USERS.includes(fromId)) {
+    await sendMessage(replyTo, '⛔ Bạn không có quyền sử dụng bot này.');
+    return res.status(200).end();
+  }
+
   const text = message.text.trim();
-  const replyTo = message.chat.id.toString(); // Người gửi lệnh
 
   try {
     let vouchers = (await kv.get(TARGET_CHAT_ID)) || [];
@@ -17,7 +26,6 @@ export default async function handler(req, res) {
       const input = text.slice(5).trim();
       let code, promo, sign, msg = '';
 
-      // Nếu input bắt đầu bằng "http" → parse URL
       if (input.startsWith('http')) {
         try {
           const urlObj = new URL(input);
@@ -30,7 +38,6 @@ export default async function handler(req, res) {
           return res.status(200).end();
         }
       } else {
-        // Parse JSON như trước
         try {
           const v = JSON.parse(input);
           code = v.voucher_code;
@@ -56,8 +63,8 @@ export default async function handler(req, res) {
           promotionid: Number(promo),
           signature: sign,
           message: msg,
-          active_hours: '',   // mặc định không khung giờ
-          check_interval: 60  // mặc định, script sẽ tự điều chỉnh
+          active_hours: '',
+          check_interval: 60
         });
         await kv.set(TARGET_CHAT_ID, vouchers);
         await sendMessage(replyTo, `✅ Đã thêm voucher ${code}.`);
